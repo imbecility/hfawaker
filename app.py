@@ -1,7 +1,7 @@
 from asyncio import sleep, create_task, CancelledError, gather
 from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timedelta
-from json import dumps
+from json import dumps, loads
 from os import environ
 from pathlib import Path
 from random import randint, choice, uniform, randrange
@@ -20,14 +20,20 @@ from patchright.async_api import (
 from prlps_fakeua import UserAgent
 from starlette.responses import Response
 
+# создай секрет SPACES и добавь в него ссылки на спейсы, каждую с новой строки
+SPACES = [space.strip() for space in environ.get('SPACES', '').strip().split('\n') if space.strip()]
+
+# можно подгрузить состояние браузера из файла
+# это необходимо для доступа к закрытым спейсам со своего аккаунта
+# см.: https://raw.githubusercontent.com/imbecility/hfawaker/refs/heads/main/save_storage_state.py
+
+STORAGE_STATE = Path(__file__).parent / 'state.json'
+
 # задай интервал обновления в часах
 UPDATE_INTERVAL_IN_HOURS = 10
 
 # задай количество одновременных экземпляров браузера
 BATCH_SIZE = 4
-
-# создай секрет SPACES и добавь в него ссылки на спейсы, каждую с новой строки
-SPACES = [space.strip() for space in environ.get('SPACES', '').strip().split('\n') if space.strip()]
 
 if not SPACES:
     from sys import exit
@@ -43,6 +49,26 @@ user_agent = UserAgent(
     fallback='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 Edg/140.0.0.0',
 )
 
+PERMISSIONS = [
+    'background-sync',
+    'clipboard-read',
+    'clipboard-write',
+    'geolocation',
+    'microphone',
+    'notifications',
+    'storage-access',
+]
+
+
+def storage_state():
+    if STORAGE_STATE.is_file():
+        with suppress(Exception):
+            loads(STORAGE_STATE.read_text())
+            return STORAGE_STATE
+    print(f'{STORAGE_STATE} не будет использоваться, '
+          f'т.к. он не валиден или не существует')
+    return None
+
 
 def random_params():
     widths = [1366, 1536, 1440, 1920, 2560]
@@ -54,12 +80,13 @@ def random_params():
         latitude=float('47.' + str(randint(123, 754))),
         longitude=float('-122.' + str(randint(123, 754)))
     )
-    return screen, viewport, geo
+    timezone = 'America/Los_Angeles'
+    return screen, viewport, geo, timezone
 
 
 async def new_context(headless: bool = False, slow_mo: int = None):
     playwright = await async_playwright().start()
-    screen, viewport, geo = random_params()
+    screen, viewport, geo, timezone = random_params()
     browser = await playwright.chromium.launch(
         headless=headless,
         args=[
@@ -76,12 +103,12 @@ async def new_context(headless: bool = False, slow_mo: int = None):
         bypass_csp=True,
         user_agent=user_agent.random,
         locale='en-US',
-        permissions=['notifications', 'geolocation'],
+        permissions=PERMISSIONS,
         geolocation=geo,
         color_scheme='dark',
-        timezone_id='America/Los_Angeles',
+        timezone_id=timezone,
         accept_downloads=True,
-        storage_state=None,  # можно сохранить состояние браузера или использовать уже сохраненный из файла
+        storage_state=storage_state(),  # можно сохранить состояние браузера или использовать уже сохраненный из файла
     )
     page = await context.new_page()
 
@@ -169,10 +196,12 @@ app_state = {
 
 
 async def awake_with_retry(space_url: str, max_retries=3):
-    for state_set in ['error_spaces', 'runtime_error_spaces', 'paused_by_owner', 'require_authorization',
-                      'running_spaces']:
+    for state_set in [
+        'error_spaces','runtime_error_spaces', 'paused_by_owner','require_authorization', 'running_spaces'
+    ]:
         if space_url in app_state[state_set]:
             app_state[state_set].remove(space_url)
+
     for attempt in range(max_retries):
         app_state['status'] = f'попытка {attempt + 1}/{max_retries}'
         try:
@@ -202,7 +231,7 @@ async def awake_with_retry(space_url: str, max_retries=3):
 
 def chunked(iterable: list[str] | tuple[str], size: int):
     for i in range(0, len(iterable), size):
-        yield iterable[i : i + size]
+        yield iterable[i: i + size]
 
 
 async def periodic_awaker(hours_repeat: int):
@@ -249,8 +278,9 @@ def format_app_state(as_json: bool = False) -> dict | str:
         'task_running': app_state['task_running'],
         'status': app_state['status'],
         'last_update': app_state['last_update'].isoformat() if app_state['last_update'] else None,
-        'next_update': (app_state['last_update'] + timedelta(hours=hours_repeat_interval())).isoformat() if app_state[
-            'last_update'] else None,
+        'next_update': (
+                app_state['last_update'] + timedelta(hours=hours_repeat_interval())
+        ).isoformat() if app_state['last_update'] else None,
         'running_spaces': list(app_state['running_spaces']),
         'error_spaces': list(app_state['error_spaces']),
         'runtime_error_spaces': list(app_state['runtime_error_spaces']),

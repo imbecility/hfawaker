@@ -5,6 +5,9 @@
 
 - `https://user-space.hf.space/status.json` - информация о состоянии спейсов в формате JSON
 
+можно задать интервал пробуждения в часах в `app.py`: `UPDATE_INTERVAL_IN_HOURS`, по умолчанию 10 (±1 минута).
+
+для доступа к своим **закрытым** спейсам можно подгрузить состояние браузера из файла, для этого рядом с `app.py` должен быть `state.json`, см. [save_storage_state.py](https://github.com/imbecility/hfawaker/blob/main/save_storage_state.py).
+
 <sup>!</sup> заглушка меняется в Dockerfile (любое репо с index.html клонируемое в static). не обязательно.
 
-можно задать интервал пробуждения в часах в `app.py`: `UPDATE_INTERVAL_IN_HOURS`, по умолчанию 10 (±1 минута).
