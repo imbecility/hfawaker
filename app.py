@@ -23,6 +23,9 @@ from starlette.responses import Response
 # задай интервал обновления в часах
 UPDATE_INTERVAL_IN_HOURS = 10
 
+# задай количество одновременных экземпляров браузера
+BATCH_SIZE = 4
+
 # создай секрет SPACES и добавь в него ссылки на спейсы, каждую с новой строки
 SPACES = [space.strip() for space in environ.get('SPACES', '').strip().split('\n') if space.strip()]
 
@@ -200,14 +203,21 @@ async def awake_with_retry(space_url: str, max_retries=3):
     return False
 
 
+def chunked(iterable: list[str] | tuple[str], size: int):
+    for i in range(0, len(iterable), size):
+        yield iterable[i : i + size]
+
+
 async def periodic_awaker(hours_repeat: int):
+    results = []
+    batch_size = max(1, min(BATCH_SIZE, 10))
     while True:
         app_state['task_running'] = True
-        tasks = []
         try:
-            for space_url in SPACES:
-                tasks.append(awake_with_retry(space_url))
-            results = await gather(*tasks)
+            for batch in chunked(SPACES, batch_size):
+                tasks = [awake_with_retry(url) for url in batch]
+                completed = await gather(*tasks)
+                results.extend(completed)
             app_state['status'] = 'всё успешно завершено' if all(results) else (
                 'все попытки завершились ошибкой' if not any(results) else 'некоторые попытки завершились ошибкой'
             )
