@@ -1,5 +1,5 @@
 from asyncio import sleep, create_task, CancelledError, gather
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timedelta
 from json import dumps
 from os import environ
@@ -95,12 +95,9 @@ async def go_to_page(url: str, page: Page):
 
 async def shutdown(playwright: Playwright, page: Page, context: BrowserContext, browser: Browser):
     await playwright.stop()
-    try:
-        await page.close()
-        await context.close()
-        await browser.close()
-    except:
-        pass
+    for obj in (page, context, browser):
+        with suppress(Exception):
+            await obj.close()
 
 
 async def awake(url: str, headless: bool = False, slow_mo: int = None) -> str:
