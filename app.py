@@ -200,7 +200,7 @@ async def awake_with_retry(space_url: str, max_retries=3):
     return False
 
 
-async def periodic_token_updater(hours_repeat: int):
+async def periodic_awaker(hours_repeat: int):
     while True:
         app_state['task_running'] = True
         tasks = []
@@ -222,7 +222,7 @@ async def periodic_token_updater(hours_repeat: int):
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    task = create_task(periodic_token_updater(hours_repeat_interval()))
+    task = create_task(periodic_awaker(hours_repeat_interval()))
     yield
     task.cancel()
     try:
