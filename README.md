@@ -1,0 +1,1 @@
+создай секрет `SPACES` и добавь в него ссылки на спейсы вида: `https://huggingface.co/spaces/user/space`, каждую с новой строки. не используй прямые ссылки вида `https://user-space.hf.space` 
