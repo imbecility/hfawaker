@@ -176,7 +176,7 @@ async def awake_with_retry(space_url: str, max_retries=3):
     for attempt in range(max_retries):
         app_state['status'] = f'попытка {attempt + 1}/{max_retries}'
         try:
-            result = await awake(space_url, headless=False, slow_mo=None)
+            result = await awake(space_url, headless=True, slow_mo=None)
             if result == 'error':
                 app_state['error_spaces'].add(space_url)
             if result == 'paused':
